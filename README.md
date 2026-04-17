@@ -2,7 +2,7 @@
 
 A **ReAct (Reasoning and Acting) Agent** built in Rust. This project enables Large Language Models (LLMs) to interact securely with a local SQLite database to answer data-driven questions using natural language.
 
-**Note:** This product is for learning/educational purpose only. 
+**Note:** This project is for learning/educational purpose only. 
 
 ## The ReAct Architecture
 
