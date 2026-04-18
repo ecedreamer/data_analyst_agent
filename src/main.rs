@@ -4,18 +4,21 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::{env, fs, io};
 
-// --- Model Configuration ---
+/// Configuration details for the chosen LLM.
 pub struct ModelConfig {
     pub model_name: String,
     pub api_key: String,
 }
 
+/// Supported LLM providers for the analyst agent.
 enum LlmProvider {
     OpenAI(ModelConfig),
     Gemini(ModelConfig),
 }
 
 impl LlmProvider {
+    /// Sends a prompt to the provider and returns the generated text.
+    /// Handles JSON parsing and specific API response structures.
     async fn completion(&self, prompt: &str, stop_sequences: Vec<String>) -> String {
         let client = reqwest::Client::new();
 
@@ -54,7 +57,6 @@ impl LlmProvider {
 
                 let body = json!({
                     "contents": [{ "parts": [{ "text": prompt }] }],
-                    // ADDING SAFETY SETTINGS HERE
                     "safetySettings": [
                         { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE" },
                         { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE" },
@@ -72,8 +74,6 @@ impl LlmProvider {
                     Ok(res) => {
                         let json: serde_json::Value = res.json().await.unwrap_or_default();
 
-                        // println!("RAW JSON: {}", json);
-
                         if let Some(candidates) = json["candidates"].as_array() {
                             if let Some(candidate) = candidates.get(0) {
                                 if let Some(text) =
@@ -82,17 +82,15 @@ impl LlmProvider {
                                     return text.to_string();
                                 }
 
-                                // Check if it was blocked by safety
                                 if let Some(reason) = candidate["finishReason"].as_str() {
                                     if reason == "SAFETY" {
-                                        return "Error: Gemini blocked the response due to Safety Filters. Check safetySettings.".to_string();
+                                        return "Error: Gemini blocked the response due to Safety Filters.".to_string();
                                     }
                                     return format!("Gemini stopped. Reason: {}", reason);
                                 }
                             }
                         }
 
-                        // Check for top-level API errors (e.g., Invalid API Key)
                         if let Some(error) = json["error"]["message"].as_str() {
                             return format!("API Error: {}", error);
                         }
@@ -106,12 +104,15 @@ impl LlmProvider {
     }
 }
 
+/// Core agent responsible for coordinating between the LLM and the SQLite database.
 struct SQLiteAgent {
     db: Arc<Mutex<Connection>>,
     llm: LlmProvider,
 }
 
 impl SQLiteAgent {
+    /// Executes a SQL string against the database.
+    /// strictly enforces SELECT-only access and formats results as a string table.
     fn execute_query(&self, sql: &str) -> String {
         let conn = self.db.lock().unwrap();
         let sql_trimmed = sql.trim().trim_matches('`').trim_matches(';');
@@ -134,7 +135,7 @@ impl SQLiteAgent {
                     count += 1;
                     if count > 15 {
                         break;
-                    }
+                    } // Prevent context window overflow
                     let mut row_str = String::new();
                     for i in 0..col_count {
                         let val = match row.get_ref_unwrap(i) {
@@ -158,6 +159,8 @@ impl SQLiteAgent {
         }
     }
 
+    /// Primary loop that manages the 'Reasoning -> Action -> Observation' cycle.
+    /// Iterates up to 5 steps to reach a 'Final Answer'.
     pub async fn run(&self, system_prompt: &str, user_question: &str) {
         let current_date = format!("Current Date: {}.", chrono::Local::now().format("%Y-%m-%d"));
 
@@ -183,6 +186,7 @@ impl SQLiteAgent {
                 break;
             }
 
+            // Extract SQL block, execute it, and feed the result back to history
             if let Some(start) = response.find("```sql") {
                 let after_block = &response[start + 6..];
                 if let Some(end) = after_block.find("```") {
@@ -198,6 +202,7 @@ impl SQLiteAgent {
     }
 }
 
+/// Entry point: Loads configuration, prepares the database connection, and captures user input.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
@@ -224,7 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     print!("\nAsk your data question: ");
-    io::stdout().flush()?; // Ensure the prompt prints before input
+    io::stdout().flush()?;
     let mut user_input = String::new();
     io::stdin().read_line(&mut user_input)?;
     let user_input = user_input.trim();
