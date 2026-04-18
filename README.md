@@ -441,7 +441,7 @@ The tool name and description are automatically picked up by `prompt_block()` an
 |---|---|---|
 | `tokio` | 1 | Async runtime (`full` feature for timer, I/O, sync) |
 | `reqwest` | 0.12 | HTTP client for LLM API calls (`json` feature for serde integration) |
-| `rusqlite` | 0.39 | SQLite driver (`bundled` feature — no system lib required) |
+| `rusqlite` | 0.33 | SQLite driver (`bundled` feature — no system lib required) |
 | `serde_json` | 1 | JSON serialisation for API request/response bodies |
 | `thiserror` | 2 | Derive macros for ergonomic error type definitions |
 | `dotenvy` | 0.15 | `.env` file loading at startup |
